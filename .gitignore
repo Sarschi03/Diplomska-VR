@@ -16,19 +16,7 @@
 /.plastic/
 
 # Generated project files
-*.csproj
-*.sln
-*.slnx
-*.unityproj
-*.user
-*.userprefs
-*.pidb
-*.booproj
-*.svd
-*.pdb
-*.mdb
-*.opendb
-*.VC.db
+
 
 # OS files
 .DS_Store
