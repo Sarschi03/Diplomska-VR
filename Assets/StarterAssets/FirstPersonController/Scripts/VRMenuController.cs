@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 public class VRMenuController : MonoBehaviour
 {
@@ -16,6 +17,9 @@ public class VRMenuController : MonoBehaviour
 
         // Gumb X na levem VR-kontrolerju.
         menuAction.AddBinding("<XRController>{LeftHand}/primaryButton");
+
+        // Menijski gumb na levem kontrolerju kot dodatna Quest/OpenXR vezava.
+        menuAction.AddBinding("<XRController>{LeftHand}/menuButton");
     }
 
     private void OnEnable()
@@ -32,7 +36,8 @@ public class VRMenuController : MonoBehaviour
 
     private void Start()
     {
-        menu.SetActive(false);
+        // Glavni meni mora biti viden takoj; v igralnih scenah se odpre z gumbom.
+        menu.SetActive(SceneManager.GetActiveScene().name == "Menu");
     }
 
     private void ToggleMenu(InputAction.CallbackContext context)

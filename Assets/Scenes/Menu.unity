@@ -79626,7 +79626,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1573151370}
         m_TargetAssemblyTypeName: MinMenu, Assembly-CSharp
-        m_MethodName: OdpriDiplodoka
+        m_MethodName: OdpriPleziozavra
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -84791,7 +84791,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 921564866}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 01614664b831546d2ae94a42149d80ac, type: 3}
   m_Name: 
