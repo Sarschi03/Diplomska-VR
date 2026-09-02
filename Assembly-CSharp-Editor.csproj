@@ -50,6 +50,7 @@
   <ItemGroup>
     <Compile Include="Assets\Toby Fredson\The Toby Foliage Engine\(TTFE)_Core\Shaders\Editor\Drawer\TTFE_DrawerDivider.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Editor\ReadmeEditor.cs" />
+    <Compile Include="Assets\Editor\StegoDiagnostics.cs" />
     <Compile Include="Assets\Toby Fredson\The Toby Foliage Engine\(TTFE)_Core\Resources\(TTFE) GLOBAL CONTROLLER\Scripts\Editor\TobyGlobalShadersController_Editor.cs" />
     <Compile Include="Assets\Toby Fredson\The Toby Foliage Engine\(TTFE)_Core\Shaders\Editor\Drawer\TTFE_DrawerFeatureBorder.cs" />
     <Compile Include="Assets\Toby Fredson\The Toby Foliage Engine\(TTFE)_Core\Shaders\Editor\Drawer\TTFE_Drawer_SingleLineTexture.cs" />
