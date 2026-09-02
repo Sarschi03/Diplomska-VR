@@ -10,7 +10,7 @@ public static class StegoDiagnostics
         foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(modelPath))
         {
             if (asset is Material material)
-                Debug.Log($"FBX material: {material.name}; shader={material.shader.name}; mainTexture={material.mainTexture?.name ?? \"<none>\"}");
+                Debug.Log($"FBX material: {material.name}; shader={material.shader.name}; mainTexture={material.mainTexture?.name ?? "<none>"}");
         }
 
         var scene = EditorSceneManager.OpenScene("Assets/Scenes/Stegozaver.unity", OpenSceneMode.Single);
@@ -21,7 +21,7 @@ public static class StegoDiagnostics
                 if (renderer.name.Contains("stego", System.StringComparison.OrdinalIgnoreCase))
                 {
                     foreach (var material in renderer.sharedMaterials)
-                        Debug.Log($"Scene renderer: {renderer.name}; material={material?.name ?? \"<none>\"}; texture={material?.mainTexture?.name ?? \"<none>\"}");
+                        Debug.Log($"Scene renderer: {renderer.name}; material={material?.name ?? "<none>"}; texture={material?.mainTexture?.name ?? "<none>"}");
                 }
             }
         }
