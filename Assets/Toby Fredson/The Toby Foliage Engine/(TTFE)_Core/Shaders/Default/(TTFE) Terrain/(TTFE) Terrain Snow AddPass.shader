@@ -64,8 +64,6 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 
 		//[HideInInspector][ToggleUI] _AddPrecomputedVelocity("Add Precomputed Velocity", Float) = 1
 
-		//[HideInInspector] _XRMotionVectorsPass("_XRMotionVectorsPass", Float) = 1
-
 		[HideInInspector] _AlphaClip("__clip", Float) = 0.0
 	}
 
@@ -88,7 +86,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 		
 
 		HLSLINCLUDE
-		#pragma target 3.5
+		#pragma target 4.5
 		#pragma prefer_hlslcc gles
 		// ensure rendering platforms toggle list is visible
 
@@ -227,7 +225,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#define ASE_FINAL_COLOR_ALPHA_MULTIPLY 1
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 			#define ASE_USING_SAMPLING_MACROS 1
 
 
@@ -237,20 +235,16 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
 			#pragma multi_compile_fragment _ _REFLECTION_PROBE_BLENDING
 			#pragma multi_compile_fragment _ _REFLECTION_PROBE_BOX_PROJECTION
-			#pragma multi_compile_fragment _ _REFLECTION_PROBE_ATLAS
 			#pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
-			#pragma multi_compile_fragment _ _SCREEN_SPACE_IRRADIANCE
 			#pragma multi_compile_fragment _ _DBUFFER_MRT1 _DBUFFER_MRT2 _DBUFFER_MRT3
 			#pragma multi_compile _ _LIGHT_LAYERS
 			#pragma multi_compile_fragment _ _LIGHT_COOKIES
-			#pragma multi_compile _ _CLUSTER_LIGHT_LOOP
+			#pragma multi_compile _ _FORWARD_PLUS
 
 			#pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
 			#pragma multi_compile _ SHADOWS_SHADOWMASK
 			#pragma multi_compile _ DIRLIGHTMAP_COMBINED
 			#pragma multi_compile _ LIGHTMAP_ON
-			#pragma multi_compile_fragment _ LIGHTMAP_BICUBIC_SAMPLING
-			#pragma multi_compile_fragment _ REFLECTION_PROBE_ROTATION
 			#pragma multi_compile _ DYNAMICLIGHTMAP_ON
 			#pragma multi_compile _ USE_LEGACY_LIGHTMAPS
 
@@ -269,7 +263,6 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
-			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ProbeVolumeVariants.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Texture.hlsl"
@@ -638,7 +631,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 						,out float outputDepth : ASE_SV_DEPTH
 						#endif
 						#ifdef _WRITE_RENDERING_LAYERS
-						, out uint outRenderingLayers : SV_Target1
+						, out float4 outRenderingLayers : SV_Target1
 						#endif
 						 ) : SV_Target
 			{
@@ -829,9 +822,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 					float3 SH = input.lightmapUVOrVertexSH.xyz;
 				#endif
 
-				#if defined(_SCREEN_SPACE_IRRADIANCE)
-					inputData.bakedGI = SAMPLE_GI(_ScreenSpaceIrradiance, input.positionCS.xy);
-				#elif defined(DYNAMICLIGHTMAP_ON)
+				#if defined(DYNAMICLIGHTMAP_ON)
 					inputData.bakedGI = SAMPLE_GI(input.lightmapUVOrVertexSH.xy, input.dynamicLightmapUV.xy, SH, inputData.normalWS);
 					inputData.shadowMask = SAMPLE_SHADOWMASK(input.lightmapUVOrVertexSH.xy);
 				#elif !defined(LIGHTMAP_ON) && (defined(PROBE_VOLUMES_L1) || defined(PROBE_VOLUMES_L2))
@@ -906,10 +897,10 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 					#if defined(_ADDITIONAL_LIGHTS)
 						uint meshRenderingLayers = GetMeshRenderingLayer();
 						uint pixelLightCount = GetAdditionalLightsCount();
-						#if USE_CLUSTER_LIGHT_LOOP
+						#if USE_FORWARD_PLUS
 							[loop] for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
 							{
-								CLUSTER_LIGHT_LOOP_SUBTRACTIVE_LIGHT_CHECK
+								FORWARD_PLUS_SUBTRACTIVE_LIGHT_CHECK
 
 								Light light = GetAdditionalLight(lightIndex, inputData.positionWS, inputData.shadowMask);
 								#ifdef _LIGHT_LAYERS
@@ -955,10 +946,10 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 					#if defined(_ADDITIONAL_LIGHTS)
 						uint meshRenderingLayers = GetMeshRenderingLayer();
 						uint pixelLightCount = GetAdditionalLightsCount();
-						#if USE_CLUSTER_LIGHT_LOOP
+						#if USE_FORWARD_PLUS
 							[loop] for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
 							{
-								CLUSTER_LIGHT_LOOP_SUBTRACTIVE_LIGHT_CHECK
+								FORWARD_PLUS_SUBTRACTIVE_LIGHT_CHECK
 
 								Light light = GetAdditionalLight(lightIndex, inputData.positionWS, inputData.shadowMask);
 								#ifdef _LIGHT_LAYERS
@@ -1008,7 +999,8 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 				#endif
 
 				#ifdef _WRITE_RENDERING_LAYERS
-					outRenderingLayers = EncodeMeshRenderingLayer();
+					uint renderingLayers = GetMeshRenderingLayer();
+					outRenderingLayers = float4( EncodeMeshRenderingLayer( renderingLayers ), 0, 0, 0 );
 				#endif
 
 				#if defined( ASE_OPAQUE_KEEP_ALPHA )
@@ -1040,7 +1032,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#define ASE_FINAL_COLOR_ALPHA_MULTIPLY 1
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 			#define ASE_USING_SAMPLING_MACROS 1
 
 
@@ -1361,7 +1353,9 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 				
 
 				float Alpha = dotResult278_g16;
-				float AlphaClipThreshold = 0.0;
+				#if defined( _ALPHATEST_ON )
+					float AlphaClipThreshold = 0.0;
+				#endif
 
 				#if defined( ASE_DEPTH_WRITE_ON )
 					input.positionCS.z = input.positionCS.z;
@@ -1401,7 +1395,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#define ASE_FINAL_COLOR_ALPHA_MULTIPLY 1
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 			#define ASE_USING_SAMPLING_MACROS 1
 
 			#pragma shader_feature EDITOR_VISUALIZATION
@@ -1803,7 +1797,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#define ASE_FINAL_COLOR_ALPHA_MULTIPLY 1
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 			#define ASE_USING_SAMPLING_MACROS 1
 
 
@@ -2175,7 +2169,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#define ASE_FINAL_COLOR_ALPHA_MULTIPLY 1
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 			#define ASE_USING_SAMPLING_MACROS 1
 
 
@@ -2498,7 +2492,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 						,out float outputDepth : ASE_SV_DEPTH
 						#endif
 						#ifdef _WRITE_RENDERING_LAYERS
-						, out uint outRenderingLayers : SV_Target1
+						, out float4 outRenderingLayers : SV_Target1
 						#endif
 						 )
 			{
@@ -2612,7 +2606,8 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 				#endif
 
 				#ifdef _WRITE_RENDERING_LAYERS
-					outRenderingLayers = EncodeMeshRenderingLayer();
+					uint renderingLayers = GetMeshRenderingLayer();
+					outRenderingLayers = float4(EncodeMeshRenderingLayer(renderingLayers), 0, 0, 0);
 				#endif
 			}
 			ENDHLSL
@@ -2641,7 +2636,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#define ASE_FINAL_COLOR_ALPHA_MULTIPLY 1
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 			#define ASE_USING_SAMPLING_MACROS 1
 
 
@@ -2650,15 +2645,15 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#pragma exclude_renderers glcore gles3 
 
 			#pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+			#if ( UNITY_VERSION >= 60000058 )
 			#pragma multi_compile _ EVALUATE_SH_MIXED EVALUATE_SH_VERTEX
+			#endif
 			#pragma multi_compile_fragment _ _REFLECTION_PROBE_BLENDING
 			#pragma multi_compile_fragment _ _REFLECTION_PROBE_BOX_PROJECTION
 			#pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
-			#pragma multi_compile_fragment _ _SCREEN_SPACE_IRRADIANCE
 			#pragma multi_compile_fragment _ _DBUFFER_MRT1 _DBUFFER_MRT2 _DBUFFER_MRT3
 			#pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
 			#pragma multi_compile_fragment _ _RENDER_PASS_ENABLED
-			#pragma multi_compile _ _CLUSTER_LIGHT_LOOP
 
 			#pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
 			#pragma multi_compile _ _MIXED_LIGHTING_SUBTRACTIVE
@@ -2666,8 +2661,6 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#pragma multi_compile _ DIRLIGHTMAP_COMBINED
 			#pragma multi_compile _ USE_LEGACY_LIGHTMAPS
 			#pragma multi_compile _ LIGHTMAP_ON
-			#pragma multi_compile_fragment _ LIGHTMAP_BICUBIC_SAMPLING
-			#pragma multi_compile_fragment _ REFLECTION_PROBE_ROTATION
 			#pragma multi_compile _ DYNAMICLIGHTMAP_ON
 
 			#pragma vertex vert
@@ -2684,7 +2677,6 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#define SHADERPASS SHADERPASS_GBUFFER
 
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
-			#include_with_pragmas "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRenderingKeywords.hlsl"
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ProbeVolumeVariants.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
@@ -2693,6 +2685,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Input.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/TextureStack.hlsl"
+            #include_with_pragmas "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRenderingKeywords.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRendering.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/DebugMipmapStreamingMacros.hlsl"
 			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
@@ -2855,7 +2848,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			CBUFFER_END//ASE Terrain Instancing
 
 
-			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutput.hlsl"
+			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/UnityGBuffer.hlsl"
 
 			void TerrainApplyMeshModification( inout float3 position, inout half3 normal, inout float4 texcoord )
 			{
@@ -3050,7 +3043,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			}
 			#endif
 
-			GBufferFragOutput frag ( PackedVaryings input
+			FragmentOutput frag ( PackedVaryings input
 								#if defined( ASE_DEPTH_WRITE_ON )
 								,out float outputDepth : ASE_SV_DEPTH
 								#endif
@@ -3233,9 +3226,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 					float3 SH = input.lightmapUVOrVertexSH.xyz;
 				#endif
 
-				#if defined(_SCREEN_SPACE_IRRADIANCE)
-					inputData.bakedGI = SAMPLE_GI(_ScreenSpaceIrradiance, input.positionCS.xy);
-				#elif defined(DYNAMICLIGHTMAP_ON)
+				#if defined(DYNAMICLIGHTMAP_ON)
 					inputData.bakedGI = SAMPLE_GI(input.lightmapUVOrVertexSH.xy, input.dynamicLightmapUV.xy, SH, inputData.normalWS);
 					inputData.shadowMask = SAMPLE_SHADOWMASK(input.lightmapUVOrVertexSH.xy);
 				#elif !defined(LIGHTMAP_ON) && (defined(PROBE_VOLUMES_L1) || defined(PROBE_VOLUMES_L2))
@@ -3285,11 +3276,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 				Light mainLight = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
 				half4 color;
 				MixRealtimeAndBakedGI(mainLight, inputData.normalWS, inputData.bakedGI, inputData.shadowMask);
-
-				color.rgb = GlobalIllumination(brdfData, (BRDFData)0, 0,
-                              inputData.bakedGI, Occlusion, inputData.positionWS,
-                              inputData.normalWS, inputData.viewDirectionWS, inputData.normalizedScreenSpaceUV);
-
+				color.rgb = GlobalIllumination(brdfData, inputData.bakedGI, Occlusion, inputData.positionWS, inputData.normalWS, inputData.viewDirectionWS);
 				color.a = Alpha;
 
 				#ifdef ASE_FINAL_COLOR_ALPHA_MULTIPLY
@@ -3300,7 +3287,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 					outputDepth = input.positionCS.z;
 				#endif
 
-				return PackGBuffersBRDFData(brdfData, inputData, Smoothness, Emission + color.rgb, Occlusion);
+				return BRDFDataToGbuffer(brdfData, inputData, Smoothness, Emission + color.rgb, Occlusion);
 			}
 
 			ENDHLSL
@@ -3325,7 +3312,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#define ASE_FINAL_COLOR_ALPHA_MULTIPLY 1
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 			#define ASE_USING_SAMPLING_MACROS 1
 
 
@@ -3682,7 +3669,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#define ASE_FINAL_COLOR_ALPHA_MULTIPLY 1
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 			#define ASE_USING_SAMPLING_MACROS 1
 
 
@@ -4038,7 +4025,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 			#define ASE_FINAL_COLOR_ALPHA_MULTIPLY 1
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 			#define ASE_USING_SAMPLING_MACROS 1
 
 
@@ -4243,7 +4230,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 
 				VertexPositionInputs vertexInput = GetVertexPositionInputs( input.positionOS.xyz );
 
-				#if defined(APPLICATION_SPACE_WARP_MOTION)
+				#if defined(APLICATION_SPACE_WARP_MOTION)
 					output.positionCSNoJitter = mul(_NonJitteredViewProjMatrix, mul(UNITY_MATRIX_M, input.positionOS));
 					output.positionCS = output.positionCSNoJitter;
 				#else
@@ -4318,7 +4305,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/Dependencies/Terrain Extra Pass/(TT
 					outputDepth = input.positionCS.z;
 				#endif
 
-				#if defined(APPLICATION_SPACE_WARP_MOTION)
+				#if defined(APLICATION_SPACE_WARP_MOTION)
 					return float4( CalcAswNdcMotionVectorFromCsPositions( input.positionCSNoJitter, input.previousPositionCSNoJitter ), 1 );
 				#else
 					return float4( CalcNdcMotionVectorFromCsPositions( input.positionCSNoJitter, input.previousPositionCSNoJitter ), 0, 0 );
@@ -4362,4 +4349,4 @@ WireConnection;79;7;77;0
 WireConnection;79;10;56;709
 WireConnection;79;30;56;701
 ASEEND*/
-//CHKSM=9B39E20FD70E0FCC479CAEF9299B0D014006F019
+//CHKSM=4D620D050DC1460EEF33BC15791C8C8D3CEEE8F2

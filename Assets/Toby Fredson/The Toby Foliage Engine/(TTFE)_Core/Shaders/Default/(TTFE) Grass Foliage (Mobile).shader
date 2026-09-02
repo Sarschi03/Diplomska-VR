@@ -79,8 +79,6 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 
 		//[HideInInspector][ToggleUI] _AddPrecomputedVelocity("Add Precomputed Velocity", Float) = 1
 
-		//[HideInInspector] _XRMotionVectorsPass("_XRMotionVectorsPass", Float) = 1
-
 		[HideInInspector] _AlphaClip("__clip", Float) = 0.0
 	}
 
@@ -103,7 +101,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 		
 
 		HLSLINCLUDE
-		#pragma target 3.5
+		#pragma target 4.5
 		#pragma prefer_hlslcc gles
 		// ensure rendering platforms toggle list is visible
 
@@ -235,7 +233,6 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			HLSLPROGRAM
 
 			#define ASE_GEOMETRY
-			#define _ALPHATEST_ON
 			#define _NORMAL_DROPOFF_TS 1
 			#pragma shader_feature_local_fragment _RECEIVE_SHADOWS_OFF
 			#pragma shader_feature_local_fragment _SPECULARHIGHLIGHTS_OFF
@@ -244,13 +241,15 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			#pragma multi_compile_instancing
 			#pragma instancing_options renderinglayer
 			#pragma multi_compile _ LOD_FADE_CROSSFADE
+			#pragma multi_compile_fog
 			#define ASE_FOG 1
 			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 			#define _SPECULAR_SETUP 1
+			#define _ALPHATEST_ON
 			#define _EMISSION
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 
 
 			#pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
@@ -259,20 +258,16 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			#pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
 			#pragma multi_compile_fragment _ _REFLECTION_PROBE_BLENDING
 			#pragma multi_compile_fragment _ _REFLECTION_PROBE_BOX_PROJECTION
-			#pragma multi_compile_fragment _ _REFLECTION_PROBE_ATLAS
 			#pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
-			#pragma multi_compile_fragment _ _SCREEN_SPACE_IRRADIANCE
 			#pragma multi_compile_fragment _ _DBUFFER_MRT1 _DBUFFER_MRT2 _DBUFFER_MRT3
 			#pragma multi_compile _ _LIGHT_LAYERS
 			#pragma multi_compile_fragment _ _LIGHT_COOKIES
-			#pragma multi_compile _ _CLUSTER_LIGHT_LOOP
+			#pragma multi_compile _ _FORWARD_PLUS
 
 			#pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
 			#pragma multi_compile _ SHADOWS_SHADOWMASK
 			#pragma multi_compile _ DIRLIGHTMAP_COMBINED
 			#pragma multi_compile _ LIGHTMAP_ON
-			#pragma multi_compile_fragment _ LIGHTMAP_BICUBIC_SAMPLING
-			#pragma multi_compile_fragment _ REFLECTION_PROBE_ROTATION
 			#pragma multi_compile _ DYNAMICLIGHTMAP_ON
 			#pragma multi_compile _ USE_LEGACY_LIGHTMAPS
 
@@ -291,7 +286,6 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
-			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ProbeVolumeVariants.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Texture.hlsl"
@@ -811,7 +805,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 						,out float outputDepth : ASE_SV_DEPTH
 						#endif
 						#ifdef _WRITE_RENDERING_LAYERS
-						, out uint outRenderingLayers : SV_Target1
+						, out float4 outRenderingLayers : SV_Target1
 						#endif
 						 ) : SV_Target
 			{
@@ -980,9 +974,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 					float3 SH = input.lightmapUVOrVertexSH.xyz;
 				#endif
 
-				#if defined(_SCREEN_SPACE_IRRADIANCE)
-					inputData.bakedGI = SAMPLE_GI(_ScreenSpaceIrradiance, input.positionCS.xy);
-				#elif defined(DYNAMICLIGHTMAP_ON)
+				#if defined(DYNAMICLIGHTMAP_ON)
 					inputData.bakedGI = SAMPLE_GI(input.lightmapUVOrVertexSH.xy, input.dynamicLightmapUV.xy, SH, inputData.normalWS);
 					inputData.shadowMask = SAMPLE_SHADOWMASK(input.lightmapUVOrVertexSH.xy);
 				#elif !defined(LIGHTMAP_ON) && (defined(PROBE_VOLUMES_L1) || defined(PROBE_VOLUMES_L2))
@@ -1057,10 +1049,10 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 					#if defined(_ADDITIONAL_LIGHTS)
 						uint meshRenderingLayers = GetMeshRenderingLayer();
 						uint pixelLightCount = GetAdditionalLightsCount();
-						#if USE_CLUSTER_LIGHT_LOOP
+						#if USE_FORWARD_PLUS
 							[loop] for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
 							{
-								CLUSTER_LIGHT_LOOP_SUBTRACTIVE_LIGHT_CHECK
+								FORWARD_PLUS_SUBTRACTIVE_LIGHT_CHECK
 
 								Light light = GetAdditionalLight(lightIndex, inputData.positionWS, inputData.shadowMask);
 								#ifdef _LIGHT_LAYERS
@@ -1106,10 +1098,10 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 					#if defined(_ADDITIONAL_LIGHTS)
 						uint meshRenderingLayers = GetMeshRenderingLayer();
 						uint pixelLightCount = GetAdditionalLightsCount();
-						#if USE_CLUSTER_LIGHT_LOOP
+						#if USE_FORWARD_PLUS
 							[loop] for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
 							{
-								CLUSTER_LIGHT_LOOP_SUBTRACTIVE_LIGHT_CHECK
+								FORWARD_PLUS_SUBTRACTIVE_LIGHT_CHECK
 
 								Light light = GetAdditionalLight(lightIndex, inputData.positionWS, inputData.shadowMask);
 								#ifdef _LIGHT_LAYERS
@@ -1159,7 +1151,8 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 				#endif
 
 				#ifdef _WRITE_RENDERING_LAYERS
-					outRenderingLayers = EncodeMeshRenderingLayer();
+					uint renderingLayers = GetMeshRenderingLayer();
+					outRenderingLayers = float4( EncodeMeshRenderingLayer( renderingLayers ), 0, 0, 0 );
 				#endif
 
 				#if defined( ASE_OPAQUE_KEEP_ALPHA )
@@ -1186,17 +1179,17 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			HLSLPROGRAM
 
 			#define ASE_GEOMETRY
-			#define _ALPHATEST_ON
 			#define _NORMAL_DROPOFF_TS 1
 			#pragma multi_compile_instancing
 			#pragma multi_compile _ LOD_FADE_CROSSFADE
 			#define ASE_FOG 1
 			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 			#define _SPECULAR_SETUP 1
+			#define _ALPHATEST_ON
 			#define _EMISSION
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 
 
 			#pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
@@ -1701,17 +1694,17 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			HLSLPROGRAM
 
 			#define ASE_GEOMETRY
-			#define _ALPHATEST_ON
 			#define _NORMAL_DROPOFF_TS 1
 			#pragma multi_compile_instancing
 			#pragma multi_compile _ LOD_FADE_CROSSFADE
 			#define ASE_FOG 1
 			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 			#define _SPECULAR_SETUP 1
+			#define _ALPHATEST_ON
 			#define _EMISSION
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 
 
 			#pragma vertex vert
@@ -2156,7 +2149,9 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 				
 
 				float Alpha = Opacity_Output155_g64081;
-				float AlphaClipThreshold = _AlphaClipping;
+				#if defined( _ALPHATEST_ON )
+					float AlphaClipThreshold = _AlphaClipping;
+				#endif
 
 				#if defined( ASE_DEPTH_WRITE_ON )
 					input.positionCS.z = input.positionCS.z;
@@ -2190,15 +2185,15 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 
 			HLSLPROGRAM
 			#define ASE_GEOMETRY
-			#define _ALPHATEST_ON
 			#define _NORMAL_DROPOFF_TS 1
 			#define ASE_FOG 1
 			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 			#define _SPECULAR_SETUP 1
+			#define _ALPHATEST_ON
 			#define _EMISSION
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 
 			#pragma shader_feature EDITOR_VISUALIZATION
 
@@ -2757,15 +2752,15 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			HLSLPROGRAM
 
 			#define ASE_GEOMETRY
-			#define _ALPHATEST_ON
 			#define _NORMAL_DROPOFF_TS 1
 			#define ASE_FOG 1
 			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 			#define _SPECULAR_SETUP 1
+			#define _ALPHATEST_ON
 			#define _EMISSION
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 
 
 			#pragma vertex vert
@@ -3292,17 +3287,17 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			HLSLPROGRAM
 
 			#define ASE_GEOMETRY
-			#define _ALPHATEST_ON
 			#define _NORMAL_DROPOFF_TS 1
 			#pragma multi_compile_instancing
 			#pragma multi_compile _ LOD_FADE_CROSSFADE
 			#define ASE_FOG 1
 			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 			#define _SPECULAR_SETUP 1
+			#define _ALPHATEST_ON
 			#define _EMISSION
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 
 
 			#pragma vertex vert
@@ -3745,7 +3740,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 						,out float outputDepth : ASE_SV_DEPTH
 						#endif
 						#ifdef _WRITE_RENDERING_LAYERS
-						, out uint outRenderingLayers : SV_Target1
+						, out float4 outRenderingLayers : SV_Target1
 						#endif
 						 )
 			{
@@ -3831,7 +3826,8 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 				#endif
 
 				#ifdef _WRITE_RENDERING_LAYERS
-					outRenderingLayers = EncodeMeshRenderingLayer();
+					uint renderingLayers = GetMeshRenderingLayer();
+					outRenderingLayers = float4(EncodeMeshRenderingLayer(renderingLayers), 0, 0, 0);
 				#endif
 			}
 			ENDHLSL
@@ -3854,7 +3850,6 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			HLSLPROGRAM
 
 			#define ASE_GEOMETRY
-			#define _ALPHATEST_ON
 			#define _NORMAL_DROPOFF_TS 1
 			#pragma shader_feature_local_fragment _RECEIVE_SHADOWS_OFF
 			#pragma shader_feature_local_fragment _SPECULARHIGHLIGHTS_OFF
@@ -3862,13 +3857,15 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			#pragma multi_compile_instancing
 			#pragma instancing_options renderinglayer
 			#pragma multi_compile _ LOD_FADE_CROSSFADE
+			#pragma multi_compile_fog
 			#define ASE_FOG 1
 			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 			#define _SPECULAR_SETUP 1
+			#define _ALPHATEST_ON
 			#define _EMISSION
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 
 
 			// Deferred Rendering Path does not support the OpenGL-based graphics API:
@@ -3876,15 +3873,15 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			#pragma exclude_renderers glcore gles3 
 
 			#pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+			#if ( UNITY_VERSION >= 60000058 )
 			#pragma multi_compile _ EVALUATE_SH_MIXED EVALUATE_SH_VERTEX
+			#endif
 			#pragma multi_compile_fragment _ _REFLECTION_PROBE_BLENDING
 			#pragma multi_compile_fragment _ _REFLECTION_PROBE_BOX_PROJECTION
 			#pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
-			#pragma multi_compile_fragment _ _SCREEN_SPACE_IRRADIANCE
 			#pragma multi_compile_fragment _ _DBUFFER_MRT1 _DBUFFER_MRT2 _DBUFFER_MRT3
 			#pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
 			#pragma multi_compile_fragment _ _RENDER_PASS_ENABLED
-			#pragma multi_compile _ _CLUSTER_LIGHT_LOOP
 
 			#pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
 			#pragma multi_compile _ _MIXED_LIGHTING_SUBTRACTIVE
@@ -3892,8 +3889,6 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			#pragma multi_compile _ DIRLIGHTMAP_COMBINED
 			#pragma multi_compile _ USE_LEGACY_LIGHTMAPS
 			#pragma multi_compile _ LIGHTMAP_ON
-			#pragma multi_compile_fragment _ LIGHTMAP_BICUBIC_SAMPLING
-			#pragma multi_compile_fragment _ REFLECTION_PROBE_ROTATION
 			#pragma multi_compile _ DYNAMICLIGHTMAP_ON
 
 			#pragma vertex vert
@@ -3910,7 +3905,6 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			#define SHADERPASS SHADERPASS_GBUFFER
 
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
-			#include_with_pragmas "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRenderingKeywords.hlsl"
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
 			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ProbeVolumeVariants.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
@@ -3919,6 +3913,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Input.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/TextureStack.hlsl"
+            #include_with_pragmas "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRenderingKeywords.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRendering.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/DebugMipmapStreamingMacros.hlsl"
 			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
@@ -4072,7 +4067,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			sampler2D _EmissionMap;
 
 
-			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutput.hlsl"
+			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/UnityGBuffer.hlsl"
 
 			inline float noise_randomValue (float2 uv) { return frac(sin(dot(uv, float2(12.9898, 78.233)))*43758.5453); }
 			inline float noise_interpolate (float a, float b, float t) { return (1.0-t)*a + (t*b); }
@@ -4427,7 +4422,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			}
 			#endif
 
-			GBufferFragOutput frag ( PackedVaryings input
+			FragmentOutput frag ( PackedVaryings input
 								#if defined( ASE_DEPTH_WRITE_ON )
 								,out float outputDepth : ASE_SV_DEPTH
 								#endif
@@ -4588,9 +4583,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 					float3 SH = input.lightmapUVOrVertexSH.xyz;
 				#endif
 
-				#if defined(_SCREEN_SPACE_IRRADIANCE)
-					inputData.bakedGI = SAMPLE_GI(_ScreenSpaceIrradiance, input.positionCS.xy);
-				#elif defined(DYNAMICLIGHTMAP_ON)
+				#if defined(DYNAMICLIGHTMAP_ON)
 					inputData.bakedGI = SAMPLE_GI(input.lightmapUVOrVertexSH.xy, input.dynamicLightmapUV.xy, SH, inputData.normalWS);
 					inputData.shadowMask = SAMPLE_SHADOWMASK(input.lightmapUVOrVertexSH.xy);
 				#elif !defined(LIGHTMAP_ON) && (defined(PROBE_VOLUMES_L1) || defined(PROBE_VOLUMES_L2))
@@ -4640,11 +4633,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 				Light mainLight = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
 				half4 color;
 				MixRealtimeAndBakedGI(mainLight, inputData.normalWS, inputData.bakedGI, inputData.shadowMask);
-
-				color.rgb = GlobalIllumination(brdfData, (BRDFData)0, 0,
-                              inputData.bakedGI, Occlusion, inputData.positionWS,
-                              inputData.normalWS, inputData.viewDirectionWS, inputData.normalizedScreenSpaceUV);
-
+				color.rgb = GlobalIllumination(brdfData, inputData.bakedGI, Occlusion, inputData.positionWS, inputData.normalWS, inputData.viewDirectionWS);
 				color.a = Alpha;
 
 				#ifdef ASE_FINAL_COLOR_ALPHA_MULTIPLY
@@ -4655,7 +4644,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 					outputDepth = input.positionCS.z;
 				#endif
 
-				return PackGBuffersBRDFData(brdfData, inputData, Smoothness, Emission + color.rgb, Occlusion);
+				return BRDFDataToGbuffer(brdfData, inputData, Smoothness, Emission + color.rgb, Occlusion);
 			}
 
 			ENDHLSL
@@ -4674,15 +4663,15 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			HLSLPROGRAM
 
 			#define ASE_GEOMETRY
-			#define _ALPHATEST_ON
 			#define _NORMAL_DROPOFF_TS 1
 			#define ASE_FOG 1
 			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 			#define _SPECULAR_SETUP 1
+			#define _ALPHATEST_ON
 			#define _EMISSION
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 
 
 			#pragma vertex vert
@@ -5159,15 +5148,15 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			HLSLPROGRAM
 
 			#define ASE_GEOMETRY
-			#define _ALPHATEST_ON
 			#define _NORMAL_DROPOFF_TS 1
 			#define ASE_FOG 1
 			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 			#define _SPECULAR_SETUP 1
+			#define _ALPHATEST_ON
 			#define _EMISSION
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 
 
 			#pragma vertex vert
@@ -5643,16 +5632,16 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 			HLSLPROGRAM
 
 			#define ASE_GEOMETRY
-			#define _ALPHATEST_ON
 			#define _NORMAL_DROPOFF_TS 1
 			#pragma multi_compile _ LOD_FADE_CROSSFADE
 			#define ASE_FOG 1
 			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 			#define _SPECULAR_SETUP 1
+			#define _ALPHATEST_ON
 			#define _EMISSION
 			#define _NORMALMAP 1
 			#define ASE_VERSION 19908
-			#define ASE_SRP_VERSION 170300
+			#define ASE_SRP_VERSION 170004
 
 
 			#pragma vertex vert
@@ -5985,7 +5974,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 
 				VertexPositionInputs vertexInput = GetVertexPositionInputs( input.positionOS.xyz );
 
-				#if defined(APPLICATION_SPACE_WARP_MOTION)
+				#if defined(APLICATION_SPACE_WARP_MOTION)
 					output.positionCSNoJitter = mul(_NonJitteredViewProjMatrix, mul(UNITY_MATRIX_M, input.positionOS));
 					output.positionCS = output.positionCSNoJitter;
 				#else
@@ -6060,7 +6049,7 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 					outputDepth = input.positionCS.z;
 				#endif
 
-				#if defined(APPLICATION_SPACE_WARP_MOTION)
+				#if defined(APLICATION_SPACE_WARP_MOTION)
 					return float4( CalcAswNdcMotionVectorFromCsPositions( input.positionCSNoJitter, input.previousPositionCSNoJitter ), 1 );
 				#else
 					return float4( CalcNdcMotionVectorFromCsPositions( input.positionCSNoJitter, input.previousPositionCSNoJitter ), 0, 0 );
@@ -6082,13 +6071,13 @@ Shader "Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile)"
 Version=19908
 Node;AmplifyShaderEditor.CommentaryNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4194;-768,-624;Inherit;False;568.2366;464.0368;;5;4005;4358;4295;4301;4020;DRAWERS;0,0,0,1;0;0
 Node;AmplifyShaderEditor.RangedFloatNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4301;-624,-464;Inherit;False;Property;_FACERENDERING;FACE RENDERING;1;0;Create;True;0;0;0;False;2;TTFE_DrawerFeatureBorder;Space (10);False;0;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.RangedFloatNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4358;-640,-272;Inherit;False;Property;_ADVANCEDSETTINGS;ADVANCED SETTINGS;45;0;Create;True;0;0;0;False;2;TTFE_DrawerFeatureBorder;Space (10);False;0;0;0;0;0;1;FLOAT;0
+Node;AmplifyShaderEditor.RangedFloatNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4358;-640,-272;Inherit;False;Property;_ADVANCEDSETTINGS;ADVANCED SETTINGS;46;0;Create;True;0;0;0;False;2;TTFE_DrawerFeatureBorder;Space (10);False;0;0;0;0;0;1;FLOAT;0
 Node;AmplifyShaderEditor.RangedFloatNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4005;-720,-560;Inherit;False;Property;_TTFEGRASSFOLIAGESHADERMOBILE;(TTFE) GRASS FOLIAGE SHADER (MOBILE);0;0;Create;True;0;0;0;False;1;TTFE_DrawerTitle;False;0;0;0;0;0;1;FLOAT;0
 Node;AmplifyShaderEditor.SimpleAddOpNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4020;-336,-352;Inherit;False;4;4;0;FLOAT;0;False;1;FLOAT;0;False;2;FLOAT;0;False;3;COLOR;0,0,0,0;False;1;COLOR;0
 Node;AmplifyShaderEditor.RangedFloatNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4295;-624,-368;Inherit;False;Property;_BackfaceCulling;Backface Culling;2;1;[Enum];Create;True;0;3;Off;0;Front;1;Back;2;0;True;1;Space (10);False;0;0;0;0;0;1;FLOAT;0
-Node;AmplifyShaderEditor.FunctionNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4421;-736,288;Inherit;False;(TTFE) Grass Foliage_Wind System (Mobile);36;;64080;132823e840f443447bf2e73c56fa733c;0;0;1;FLOAT4;0
-Node;AmplifyShaderEditor.FunctionNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4422;-704,0;Inherit;False;(TTFE) Grass Foliage_Shading (Mobile);3;;64081;c818f2ecccc75df44b01c240ce0c41ed;0;0;8;COLOR;0;FLOAT3;180;COLOR;583;FLOAT;186;FLOAT;182;FLOAT;183;FLOAT;184;FLOAT3;188
-Node;AmplifyShaderEditor.RangedFloatNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4435;-544,400;Inherit;False;Property;_AlphaClipping; Alpha Clipping;35;0;Create;True;0;0;0;False;0;False;0.4;0;0;0;0;1;FLOAT;0
+Node;AmplifyShaderEditor.FunctionNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4421;-736,288;Inherit;False;(TTFE) Grass Foliage_Wind System (Mobile);37;;64080;132823e840f443447bf2e73c56fa733c;0;0;1;FLOAT4;0
+Node;AmplifyShaderEditor.FunctionNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4422;-704,0;Inherit;False;(TTFE) Grass Foliage_Shading (Mobile);4;;64081;c818f2ecccc75df44b01c240ce0c41ed;0;0;8;COLOR;0;FLOAT3;180;COLOR;583;FLOAT;186;FLOAT;182;FLOAT;183;FLOAT;184;FLOAT3;188
+Node;AmplifyShaderEditor.RangedFloatNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4435;-544,400;Inherit;False;Property;_AlphaClipping; Alpha Clipping;36;0;Create;True;0;0;0;False;0;False;0.4;0;0;0;0;1;FLOAT;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4423;0,0;Float;False;False;-1;3;UnityEditor.ShaderGraphLitGUI;0;1;New Amplify Shader;94348b07e5e8bab40bd6c8a1e3df54cd;True;ExtraPrePass;0;0;ExtraPrePass;6;False;False;False;False;False;False;False;False;False;False;False;False;True;0;False;;False;True;0;False;;False;False;False;False;False;False;False;False;False;True;False;0;False;;255;False;;255;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;False;True;1;False;;True;3;False;;True;True;0;False;;0;False;;False;True;4;RenderPipeline=UniversalPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;UniversalMaterialType=Lit;True;5;True;14;all;0;False;True;1;1;False;;0;False;;0;1;False;;0;False;;False;False;False;False;False;False;False;False;False;False;False;False;True;0;False;;False;True;True;True;True;True;0;False;;False;False;False;False;False;False;False;True;False;0;False;;255;False;;255;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;False;True;1;False;;True;3;False;;True;True;0;False;;0;False;;False;True;0;False;False;0;;0;0;Standard;0;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4424;0,0;Float;False;True;-1;3;UnityEditor.ShaderGraphLitGUI;0;20;Toby Fredson/The Toby Foliage Engine/(TTFE) Grass Foliage (Mobile);94348b07e5e8bab40bd6c8a1e3df54cd;True;Forward;0;1;Forward;21;False;False;False;False;False;False;False;False;False;False;False;False;True;0;False;;False;True;2;False;;False;False;False;False;False;False;False;False;False;True;False;0;False;;255;False;;255;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;False;True;1;False;;True;3;False;;True;True;0;False;;0;False;;False;True;4;RenderPipeline=UniversalPipeline;RenderType=TransparentCutout=RenderType;Queue=AlphaTest=Queue=0;UniversalMaterialType=Lit;True;5;True;14;all;0;False;True;1;1;False;;0;False;;1;1;False;;0;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;True;True;True;True;0;False;;False;False;False;False;False;False;False;True;False;0;False;;255;False;;255;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;False;True;1;False;;True;3;False;;True;True;0;False;;0;False;;False;True;1;LightMode=UniversalForward;False;False;0;;0;0;Standard;51;Category;0;0;  Instanced Terrain Normals;1;0;Lighting Model;0;0;Workflow;0;639135739582172515;Surface;0;0;  Keep Alpha;0;0;  Refraction Model;0;0;  Blend;0;0;Two Sided;0;639135739744376858;Alpha Clipping;1;639135739768732778;  Use Shadow Threshold;0;0;Fragment Normal Space;0;0;Forward Only;0;0;Transmission;0;0;  Transmission Shadow;0.5,True,_ASETransmissionShadow;0;Translucency;0;0;  Translucency Strength;1,True,_ASETranslucencyStrength;0;  Normal Distortion;0.5,True,_ASETranslucencyNormalDistortion;0;  Scattering;2,True,_ASETranslucencyScattering;0;  Direct;0.9,True,_ASETranslucencyDirect;0;  Ambient;0.1,True,_ASETranslucencyAmbient;0;  Shadow;0.5,True,_ASETranslucencyShadow;0;Cast Shadows;1;0;Receive Shadows;2;0;Specular Highlights;2;0;Environment Reflections;2;0;Receive SSAO;1;0;Motion Vectors;1;0;  Add Precomputed Velocity;0;0;  XR Motion Vectors;0;0;GPU Instancing;1;0;LOD CrossFade;1;0;Built-in Fog;1;0;_FinalColorxAlpha;0;0;Meta Pass;1;0;Override Baked GI;0;0;Extra Pre Pass;0;0;Tessellation;0;0;  Phong;0;0;  Strength;0.5,True,_TessellationPhong;0;  Type;0;0;  Tess;16,True,_TessellationStrength;0;  Min;10,True,_TessellationDistanceMin;0;  Max;25,True,_TessellationDistanceMax;0;  Edge Length;16,False,;0;  Max Displacement;25,False,;0;Write Depth;0;0;  Early Z;0;0;Vertex Position;1;0;Debug Display;1;0;Clear Coat;0;0;0;12;False;True;True;True;True;True;True;True;True;True;True;False;False;;False;0
 Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4425;0,0;Float;False;False;-1;3;UnityEditor.ShaderGraphLitGUI;0;1;New Amplify Shader;94348b07e5e8bab40bd6c8a1e3df54cd;True;ShadowCaster;0;2;ShadowCaster;0;False;False;False;False;False;False;False;False;False;False;False;False;True;0;False;;False;True;0;False;;False;False;False;False;False;False;False;False;False;True;False;0;False;;255;False;;255;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;False;True;1;False;;True;3;False;;True;True;0;False;;0;False;;False;True;4;RenderPipeline=UniversalPipeline;RenderType=Opaque=RenderType;Queue=Geometry=Queue=0;UniversalMaterialType=Lit;True;5;True;14;all;0;False;False;False;False;False;False;False;False;False;False;False;False;True;0;False;;False;False;False;True;False;False;False;False;0;False;;False;False;False;False;False;False;False;False;False;True;1;False;;True;3;False;;False;False;True;1;LightMode=ShadowCaster;False;False;0;;0;0;Standard;0;False;0
@@ -6116,4 +6105,4 @@ WireConnection;4424;7;4435;0
 WireConnection;4424;8;4421;0
 WireConnection;4424;10;4422;188
 ASEEND*/
-//CHKSM=12581029716356BB35EEF2BC9CEE1E1B914E640C
+//CHKSM=FB897599A66654E70FAC9C7FF7A3BAC944C7327C
