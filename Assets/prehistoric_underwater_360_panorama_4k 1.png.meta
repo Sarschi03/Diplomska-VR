@@ -27,7 +27,9 @@ TextureImporter:
   vTOnly: 0
   ignoreMipmapLimit: 0
   grayScaleToAlpha: 0
-  generateCubemap: 6
+  # This is an equirectangular (2:1) panorama.  Keep it as a regular 2D
+  # texture; the Skybox/Panoramic shader performs the 360-degree mapping.
+  generateCubemap: 0
   cubemapConvolution: 0
   seamlessCubemap: 0
   textureFormat: 1
@@ -37,7 +39,8 @@ TextureImporter:
     filterMode: 1
     aniso: 1
     mipBias: 0
-    wrapU: 0
+    # Repeat horizontally so the left/right panorama seam remains continuous.
+    wrapU: 1
     wrapV: 0
     wrapW: 0
   nPOTScale: 1
